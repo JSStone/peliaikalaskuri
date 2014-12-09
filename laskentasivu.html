@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Peliaikalaskuri: countdown</title>
+		<style>
+			.ui-helper-center {
+				text-align: center;
+			}
+			.width {
+				width: 100px;
+			}
+			.pienempinappula {
+				width: 200px;
+				height: 30px;
+			}
+			.teksti-kenttien-asettelu {
+				padding-left: 3em
+			}
+			input.button-pause {
+		    background-color: transparent; /* make the button transparent */
+		    background-repeat: no-repeat;  /* make the background image appear only once */
+		    background-position: 0px 0px;  /* equivalent to 'top left' */
+		    border: none;           /* assuming we don't want any borders */
+		    cursor: pointer;        /* make the cursor like hovering over an <a> element */
+		    height: 32px;           /* make this the size of your image */
+		    padding-left: 32px;     /* make text start to the right of the image */
+		    vertical-align: middle; /* align the text vertically centered */
+			}
+		</style>
+		<script>
+			var up, down;
+			var min1, sec1;
+			var cmin1, csec1, cmin2, csec2;
+
+			function Minutes(data) {
+				for (var i = 0; i < data.length; i++)
+					if (data.substring(i, i + 1) == ":")
+						break;
+				return (data.substring(0, i));
+			}
+
+			function Seconds(data) {
+				for (var i = 0; i < data.length; i++)
+					if (data.substring(i, i + 1) == ":")
+						break;
+				return (data.substring(i + 1, data.length));
+			}
+
+			function Display(min, sec) {
+				var disp;
+				if (min <= 9)
+					disp = " 0";
+				else
+					disp = " ";
+				disp += min + ":";
+				if (sec <= 9)
+					disp += "0" + sec;
+				else
+					disp += sec;
+				return (disp);
+			}
+
+			function Up() {
+				cmin1 = 0;
+				csec1 = 0;
+				min1 = 0 + Minutes(document.aikaform.beg1.value);
+				sec1 = 0 + Seconds(document.aikaform.beg1.value);
+				UpRepeat();
+			}
+
+			function UpRepeat() {
+				csec1++;
+				if (csec1 == 60) {
+					csec1 = 0;
+					cmin1++;
+				}
+				document.aikaform.disp1.value = Display(cmin1, csec1);
+				if ((cmin1 == min1) && (csec1 == sec1))
+					alert("Aika loppui k&auml;ytt&auml;ll&auml;" + lyhyinaikakayttaja);
+				else
+					up = setTimeout("UpRepeat()", 1000);
+			}
+
+			function Down() {
+				cmin2 = 1 * Minutes(document.aikaform.beg2.value);
+				csec2 = 0 + Seconds(document.aikaform.beg2.value);
+				kauntteri = 0;
+				DownRepeat();
+			}
+
+			function DownRepeat() {
+				csec2--;
+				if (csec2 == -1) {
+					csec2 = 59;
+					cmin2--;
+					// Kirjoitetaan kayttajien ajat localStrogeen minuutin valein
+					var kayttajat = JSON.parse(localStorage["laskurille"]);
+					for (var i = 0; i < kayttajat.length; i++) {
+						kayttajanaika = localStorage.getItem(kayttajat[i]);
+						localStorage.setItem(kayttajat[i], kayttajanaika - 1);
+						//console.log(kayttajat[i] + " " + kayttajanaika);
+					}
+				}
+
+				document.aikaform.disp2.value = Display(cmin2, csec2);
+
+				if ((cmin2 == 0) && (csec2 == 0)) {
+					document.getElementById('audiotagi').play();
+					alert("Aika loppui kayttajalla " + lyhyinaikakayttaja);
+					var jaljellaolevatkayttajat = [];
+					var kayttajat = JSON.parse(localStorage.getItem("laskurille"));
+					for (var i = 0; i < kayttajat.length; i++) {
+						if (kayttajat[i] != lyhyinaikakayttaja) {
+							if (localStorage.getItem(kayttajat[i]) == 0) {
+							} else {
+								jaljellaolevatkayttajat.push(kayttajat[i]);
+							}
+						}
+						// Skriivataan loput kayttajat localstorageen
+						localStorage.setItem("laskurille", JSON.stringify(jaljellaolevatkayttajat));
+					}
+					location.reload();
+				} else
+					down = setTimeout("DownRepeat()", 1000);
+			}
+		</script>
+	</head>
+	<body>
+		<audio id="audiotagi" src="aikaloppui.wav" preload="auto"></audio>
+		<div id="nimilista"></div>
+		<div id="aika"></div>
+		<div id="nappulat"></div>
+
+		<script>
+			// ToDo:
+			// * Kun lyhyin aika loppuu annetaan ilmoitus mutta muiden aika jatkaa laskentaa taustalla ja annetaan uusi ilmoitus kun sen aika tullee
+			// * Tulostetaan kayttajat aikajarjestyksessa
+			// * Ulkoasu pitaa kruusata, esim. aikakentat samaan paddingiin jne.
+
+			function kirjoitauusielementti(teksti, elementinnimi) {
+				var newElement = document.createElement('div');
+				newElement.innerHTML = teksti;
+				document.getElementById(elementinnimi).appendChild(newElement);
+			}
+
+			function lopeta() {
+				if (confirm("Lopeta ajanlaskenta?")) {
+					close();
+				}
+			}
+
+			function pause() {
+				setTimeout(function() {
+					alert("Jatka painamala OK!");
+				}, 1000);
+			}
+
+			var kayttajat = JSON.parse(localStorage["laskurille"]);
+			var lyhyinaika = 100000;
+			var lyhyinaikakayttaja = "";
+			var kayttajanaika = "";
+
+			kirjoitettavaelementti = "<table style='width:10% class=ui-helper-center'><tr><th>K&auml;ytt&auml;j&auml;</th><th>Aika</th></tr>";
+			for (var i = 0; i < kayttajat.length; i++) {
+				kayttajanaika = localStorage.getItem(kayttajat[i]);
+				//console.log(kayttajat[i]);
+
+				// Kaydaan lapi kayttajat ja otetaan talteen lyhyimman peliajan omaava pelaaja
+				if (kayttajanaika < lyhyinaika) {
+					lyhyinaika = localStorage.getItem(kayttajat[i]);
+					lyhyinaikakayttaja = kayttajat[i];
+				}
+				// Kirjoitetaan kayttajat taulukkoon
+				kirjoitettavaelementti = kirjoitettavaelementti + "<tr><td>" + kayttajat[i] + "</td><td>" + kayttajanaika + "</td></tr>";
+			}
+			kirjoitettavaelementti = kirjoitettavaelementti + "</table>";
+			// Kirjoitetaan kerralla <div> elementtiin koko taulukko
+			kirjoitauusielementti(kirjoitettavaelementti, "nimilista");
+			
+			// div id=aika kohtaan kirjoitetaan lyhimman ajan omaava kayttaja
+			kirjoitauusielementti("<FORM name=\"aikaform\"><br><input id=\"piilonappula\" class=\"teksti-kenttien-asettelu\" type=\"text\" name=\"beg2\" size=\"7\" value=\"" + lyhyinaika + ":00\"><br>Aikaa j&auml;ljell&auml; <input class=\"teksti-kenttien-asettelu\" type=\"text\" name=\"disp2\" size=\"7\"></FORM>", "aika");
+			document.getElementById('piilonappula').style.visibility = 'hidden';
+
+			// *************
+			// div id=nappulat luodaan napit
+			// *************
+			var luonappulat = "<br><button class=\"button-pause\" onclick=\"lopeta()\"><img src=\"stop.gif\" /></button><button class=\"button-pause\" onclick=\"pause()\"><img src=\"pause.gif\" /></button>";
+			kirjoitauusielementti(luonappulat, "nappulat");
+
+			//Kaynnistetaan laskuri automaagisesti
+			window.onload = Down();
+		</script>
+	</body>
+</html>

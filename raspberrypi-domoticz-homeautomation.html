@@ -1,0 +1,238 @@
+Parts:
+Slave (in Boiler room) Domoticz RaspberryPi B (256Mb memory)
+- USB Wlan dongle
+- 4 x DS18B20+ temperature sensors (one wire)
+- 1 x 4.7K Ohm resistor (used for pullup on GPIO)
+- 1 x HC-SR501 PIR sensor
+
+Further reading:
+http://www.modmypi.com/blog/raspberry-pi-gpio-sensing-motion-detection
+http://www.mpja.com/download/31227sc.pdf
+
+Master Domoticz RaspberryPi B+ (512Mb memory)
+- zWave USB dongle (aeotec Z-Stick Series 2)
+- USB Wlan dongle
+- MEMS sensor evaluating board
+
+Z-Wave:
+- Siren & Alarm light ZM1601
+- Motion sensor & Temp & Luminance & Humidity Aeotec 4 in 1 DSB05
+- 2 x Door magnetic sensors ZD2102
+
+Further reading:
+http://www.element14.com/community/community/designcenter/mems-sensor-board
+
+--------------------------------
+**** PIR Python source:
+
+
+import RPi.GPIO as GPIO
+import urllib
+import urllib2
+import time
+
+GPIO.setmode(GPIO.BCM)
+PIR_PIN = 7
+GPIO.setup(PIR_PIN, GPIO.IN)
+
+def MOTION(PIR_PIN):
+               print "Motion Detected!"
+               url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=On&level=0"
+              f = urllib2.urlopen(url)
+               print url
+               time.sleep(60)
+               url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=Off&level=0"
+               f = urllib2.urlopen(url)
+               print url
+print "PIR Module Test (CTRL+C to exit)"
+time.sleep(2)
+print "Ready"
+try:
+
+               GPIO.add_event_detect(PIR_PIN, GPIO.RISING, callback=MOTION)
+               while 1:
+                              time.sleep(100)
+except KeyboardInterrupt:
+               print " Quit"
+               GPIO.cleanup()
+
+--------------------------------
+**** Debugging GPIO temp reading source:
+Usage: sudo python [script name] [One wire address] [domoticz virtual sensor ID]
+
+import os
+import time
+import urllib
+import urllib2
+import sys, getopt
+
+w1TempAddress = str(sys.argv[1])
+domoIDX = str(sys.argv[2])
+
+print w1TempAddress
+print domoIDX
+os.system('modprobe w1-gpio')
+os.system('modprobe w1-therm')
+temp_sensor = '/sys/bus/w1/devices/' + w1TempAddress + '/w1_slave'
+def temp_raw():
+    f = open(temp_sensor, 'r')
+    lines = f.readlines()
+    f.close()
+    return lines
+
+def read_temp():
+    lines = temp_raw()
+    while lines[0].strip()[-3:] != 'YES':
+        time.sleep(0.2)
+        lines = temp_raw()
+    temp_output = lines[1].find('t=')
+
+    if temp_output != -1:
+        temp_string = lines[1].strip()[temp_output+2:]
+        temp_c = float(temp_string) / 1000.0
+        temp_f = temp_c * 9.0 / 5.0 + 32.0
+        url = "http://192.168.1.1:8080/json.htm?type=command&param=udevice&idx=%s&nvalue=0&svalue=%.02f" % (domoIDX,temp_c)
+        f = urllib2.urlopen(url)
+        print url
+        #return temp_c
+
+read_temp()
+
+--------------------------------
+**** Reset PIR sensor (debugging) source:
+
+import RPi.GPIO as GPIO
+import urllib
+import urllib2
+import time
+
+url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=Off&level=0"
+f = urllib2.urlopen(url)
+print url
+
+--------------------------------
+**** BASH get temp sensor addresses:
+
+#!/bin/bash
+# This script enables oneWire and reads the temp
+
+sudo modprobe w1-gpio
+sudo modprobe w1-therm
+
+cd /sys/bus/w1/devices/
+ls
+
+cd ~
+
+--------------------------------
+**** XTRINSIC MEMS Board reading source:
+
+#!/usr/bin/env python
+import math
+import time
+import urllib
+import urllib2
+from ctypes import *
+from decimal import *
+#cdll.LoadLibrary("./bcm2835.so")
+
+sensor = CDLL("./sensor.so")
+
+class mpl3115a2:
+        def __init__(self):
+                if (0 == sensor.bcm2835_init()):
+                        print "bcm3835 driver init failed."
+                        return
+
+        def writeRegister(self, register, value):
+            sensor.MPL3115A2_WRITE_REGISTER(register, value)
+
+        def readRegister(self, register):
+                return sensor.MPL3115A2_READ_REGISTER(register)
+
+        def active(self):
+                sensor.MPL3115A2_Active()
+
+        def standby(self):
+                sensor.MPL3115A2_Standby()
+
+        def initAlt(self):
+                sensor.MPL3115A2_Init_Alt()
+
+        def initBar(self):
+                sensor.MPL3115A2_Init_Bar()
+
+        def readAlt(self):
+                return sensor.MPL3115A2_Read_Alt()
+
+        def readTemp(self):
+                return sensor.MPL3115A2_Read_Temp()
+
+        def setOSR(self, osr):
+                sensor.MPL3115A2_SetOSR(osr);
+
+        def setStepTime(self, step):
+                sensor.MPL3115A2_SetStepTime(step)
+
+        def getTemp(self):
+                t = self.readTemp()
+                t_m = (t >> 8) & 0xff;
+                t_l = t & 0xff;
+                t_l = t_l >> 4;
+                t_l = t_l * 0.0625;
+
+                return (t_m + t_l)
+
+        def getAlt(self):
+                alt = self.readAlt()
+                alt_m = alt >> 8
+                alt_l = alt & 0xff
+
+                if (alt_l > 99):
+                        alt_l = alt_l / 1000.0
+                else:
+                        alt_l = alt_l / 100.0
+
+                return self.twosToInt(alt_m, 16) + alt_l
+        def getBar(self):
+                alt = self.readAlt()
+                alt_m = alt >> 6
+                alt_l = alt & 0x03
+
+                if (alt_l > 99):
+                        alt_l = alt_l
+                else:
+                        alt_l = alt_l
+
+                return (self.twosToInt(alt_m, 18))
+
+        def twosToInt(self, val, len):
+                # Convert twos compliment to integer
+                if(val & (1 << len - 1)):
+                        val = val - (1<<len)
+
+                return val
+
+mpl = mpl3115a2()
+mpl.initBar()
+#mpl.setOSR(128)
+mpl.active()
+time.sleep(5)
+TEMP = mpl.getTemp()
+BAR = mpl.getBar()
+i = str(BAR)
+
+if i[0] == "1":
+        i = float(i[:4] + '.' + i[2:])
+else:
+        i = float(i[:3] + '.' + i[3:])
+url = "http://192.168.1.1:8080/json.htm?type=command&param=udevice&idx=19&nvalue=0&svalue=%.02f;50;HUM_STAT;%.2f;BAR_FOR" % (TEMP,i)
+f = urllib2.urlopen(url)
+print url
+
+--------------------------------
+In future:
+- Propably Flame sensor on LDR will be conneted to rPi to sense when oilburner is generating warm water / heat to the house.
+http://www.oracle.com/technetwork/articles/java/cruz-gpio-2295970.html
+
+- Also heat pump will be controlled via Zwave in future using by ZXT-120 IR module

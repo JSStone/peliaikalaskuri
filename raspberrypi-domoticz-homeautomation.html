@@ -125,7 +125,7 @@ ls
 cd ~
 
 --------------------------------
-**** XTRINSIC MEMS Board reading source:
+**** XTRINSIC MEMS Board reading python source:
 
 #!/usr/bin/env python
 import math
@@ -231,6 +231,140 @@ f = urllib2.urlopen(url)
 print url
 
 --------------------------------
+**** Oil consumption from temperature python script
+
+
+import os
+import time
+import urllib
+import urllib2
+import sys, getopt
+
+#-----------------------------------------
+# ToDo: Clean the code!
+#-----------------------------------------
+
+oil_start_level = 1000 # Oil start level in litres
+oil_consumption = 2 # Oil consumption in litres per hour
+domoticzURL = "http://192.168.1.81:8080"
+
+### Don't touch under this line !!! ###
+# ------------------------------------#
+
+temperatureTemporaryData = "temperature_data.txt"
+percentageTemporaryFile = "remaining-oil.txt"
+w1TempAddress = str(sys.argv[1]) # Don't touch this! Reads one wire address from CLI
+domoIDX = str(sys.argv[2]) # Don't touch this! Reads percentage counter address from CLI
+
+print w1TempAddress
+print domoIDX
+
+# Let's do the 1w trics to get the temp
+os.system('modprobe w1-gpio')
+os.system('modprobe w1-therm')
+temp_sensor = '/sys/bus/w1/devices/' + w1TempAddress + '/w1_slave'
+
+def read_from_file(temperatureTemporaryData):
+        with open(temperatureTemporaryData, 'r') as f:
+                my_list = [line.rstrip('\n') for line in f]
+        return my_list
+
+def write_to_file(temperatureTemporaryData,data):
+        with open(temperatureTemporaryData, 'w') as f:
+                for s in data:
+                        f.write(str(s) + '\n')
+
+def write_single_line_to_file(temperatureTemporaryData,data):
+        with open(temperatureTemporaryData, 'w') as f:
+                f.write(data + '\n')
+
+def temp_raw():
+    f = open(temp_sensor, 'r')
+    lines = f.readlines()
+    f.close()
+    return lines
+
+def write_data_to_domo(domoIDX,current_percentage):
+        url = "%s/json.htm?type=command&param=udevice&idx=%s&nvalue=0&svalue=%.02f" % (domoticzURL,domoIDX,current_percentage)
+        f = urllib2.urlopen(url)
+        print url
+
+def read_temp():
+    lines = temp_raw()
+    while lines[0].strip()[-3:] != 'YES':
+        time.sleep(0.2)
+        lines = temp_raw()
+    temp_output = lines[1].find('t=')
+
+    if temp_output != -1:
+        temp_string = lines[1].strip()[temp_output+2:]
+        temp_c = float(temp_string) / 1000.0
+        temp_f = temp_c * 9.0 / 5.0 + 32.0
+        return round(temp_c,2)
+
+def get_average_temp(tempArray):
+        temp = 0
+        average = 0
+        for temp in tempArray:
+                average = float(average)
+                average = average + float(temp)
+        average = average / 60
+        return round(average,2)
+
+def count_percentage(percentageTemporaryFile,elapsed_time,oil_consumption,oil_start_level):
+        old_level = read_from_file(percentageTemporaryFile) # ToDo: use same file for all data!!!
+        new_oil_level = float(old_level[0]) - ((float(oil_consumption)/3600)*elapsed_time)
+        new_percentage = (new_oil_level / oil_start_level) * 100
+write_single_line_to_file(percentageTemporaryFile,str(new_oil_level))
+        return new_percentage,new_oil_level
+
+def isTempRising(new_temp,average): # Check that is temperature rising
+        verdict = False
+        #print "Average: ",average
+        print "New temp: ", new_temp
+        if new_temp >= average:
+                verdict = True
+        else:
+                verdict = False
+        return verdict
+
+def writeNewTempToArray(array,new_temp): # remove last element from array and add new
+        array.pop(59)
+        array.insert(0,new_temp)
+        return array
+
+count = 0
+#current_percentage = count_percentage() # Count remaining oil percentage
+while (count != 1): # Forever loop :)
+        tempratureRising = False
+        new_temp = read_temp() # get new temperature from oneWire device
+        earlierTempArray = read_from_file(temperatureTemporaryData) # Get last 60 temps from file
+        average = get_average_temp(earlierTempArray) # Count average temperature based on earlier temps
+        temperatureRising = isTempRising(new_temp,average) # Check is temp rising
+
+        if temperatureRising == True:
+                start_time = time.time() # Start timing when temp rising
+                while temperatureRising == True:
+                        new_temp = read_temp() # get new temperature from oneWire device
+                        earlierTempArray = writeNewTempToArray(earlierTempArray,new_temp) # Get earlier temp data
+                        average = get_average_temp(earlierTempArray) # Count average temperature based on earlier temps
+write_to_file(temperatureTemporaryData,earlierTempArray)
+                        temperatureRising = isTempRising(new_temp,average) # Check is temp rising
+                        print "Aika: ",time.time() - start_time
+                        time.sleep(2)
+                elapsed_time = time.time() - start_time # Stop timing when temp stops rising
+                print "Polttoaika: ",elapsed_time
+                current_percentage,new_oil_level = count_percentage(percentageTemporaryFile,elapsed_time,oil_consumption,oil_start_level) # Count remaining oil percentage
+                write_data_to_domo(domoIDX,current_percentage) # Write percentage to Domoticz virtual device
+                write_data_to_domo(45,new_oil_level) # Write percentage to Domoticz virtual device
+
+        earlierTempArray = writeNewTempToArray(earlierTempArray,new_temp)
+        write_to_file(temperatureTemporaryData,earlierTempArray)
+        time.sleep(5) # delays for n seconds
+
+
+--------------------------------
+
 In future:
 - Propably Flame sensor on LDR will be conneted to rPi to sense when oilburner is generating warm water / heat to the house.
 http://www.oracle.com/technetwork/articles/java/cruz-gpio-2295970.html

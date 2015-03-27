@@ -246,7 +246,7 @@ import sys, getopt
 
 oil_start_level = 1000 # Oil start level in litres
 oil_consumption = 2 # Oil consumption in litres per hour
-domoticzURL = "http://192.168.1.81:8080"
+domoticzURL = "http://192.168.1.1:8080"
 
 ### Don't touch under this line !!! ###
 # ------------------------------------#
@@ -348,7 +348,7 @@ while (count != 1): # Forever loop :)
                         new_temp = read_temp() # get new temperature from oneWire device
                         earlierTempArray = writeNewTempToArray(earlierTempArray,new_temp) # Get earlier temp data
                         average = get_average_temp(earlierTempArray) # Count average temperature based on earlier temps
-write_to_file(temperatureTemporaryData,earlierTempArray)
+                        write_to_file(temperatureTemporaryData,earlierTempArray)
                         temperatureRising = isTempRising(new_temp,average) # Check is temp rising
                         print "Aika: ",time.time() - start_time
                         time.sleep(2)

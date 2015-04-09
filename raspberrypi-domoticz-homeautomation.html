@@ -1,372 +1,373 @@
-Parts:
-Slave (in Boiler room) Domoticz RaspberryPi B (256Mb memory)
-- USB Wlan dongle
-- 4 x DS18B20+ temperature sensors (one wire)
-- 1 x 4.7K Ohm resistor (used for pullup on GPIO)
-- 1 x HC-SR501 PIR sensor
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RaspberryPi homeautomation</title>
+</head>
 
-Further reading:
-http://www.modmypi.com/blog/raspberry-pi-gpio-sensing-motion-detection
-http://www.mpja.com/download/31227sc.pdf
+<body>
+	
+ <h1>Parts:</h1>
 
-Master Domoticz RaspberryPi B+ (512Mb memory)
-- zWave USB dongle (aeotec Z-Stick Series 2)
-- USB Wlan dongle
-- MEMS sensor evaluating board
+<h2>Master Domoticz RaspberryPi B+ (512Mb memory)</h2>
+<ul>
+  <li>zWave USB dongle (aeotec Z-Stick Series 2)</li>
+  <li>USB Wlan dongle</li>
+  <li>MEMS sensor evaluating board</li>
+</ul>
 
-Z-Wave:
-- Siren & Alarm light ZM1601
-- Motion sensor & Temp & Luminance & Humidity Aeotec 4 in 1 DSB05
-- 2 x Door magnetic sensors ZD2102
+<h2>Z-Wave:</h2>
+<ul>
+  <li>Siren & Alarm light ZM1601</li>
+  <li>Motion sensor & Temp & Luminance & Humidity Aeotec 4 in 1 DSB05</li>
+  <li>2 x Door magnetic sensors ZD2102</li>
+</ul>
 
-Further reading:
-http://www.element14.com/community/community/designcenter/mems-sensor-board
+<h2>Further reading:</h2>
+<a href="http://www.element14.com/community/community/designcenter/mems-sensor-board">http://www.element14.com/community/community/designcenter/mems-sensor-board</a>
 
---------------------------------
-**** PIR Python source:
+<h2>Slave (in Boiler room) Domoticz RaspberryPi B (256Mb memory)</h2>
+<ul>
+  <li>USB Wlan dongle</li>
+  <li>4 x DS18B20+ temperature sensors (one wire)</li>
+  <li>1 x 4.7K Ohm resistor (used for pullup on GPIO)</li>
+  <li>1 x HC-SR501 PIR sensor</li>
+</ul>
 
-
+<h2>Further reading:</h2>
+<a href="http://www.modmypi.com/blog/raspberry-pi-gpio-sensing-motion-detection">http://www.modmypi.com/blog/raspberry-pi-gpio-sensing-motion-detection</a><br>
+<a href="http://www.mpja.com/download/31227sc.pdf">http://www.mpja.com/download/31227sc.pdf</a>
+<h1>Source codes for used scripts</h1>
+	
+<h2>PIR Python source:</h2>
 import RPi.GPIO as GPIO
-import urllib
-import urllib2
-import time
-
-GPIO.setmode(GPIO.BCM)
-PIR_PIN = 7
-GPIO.setup(PIR_PIN, GPIO.IN)
-
-def MOTION(PIR_PIN):
-               print "Motion Detected!"
-               url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=On&level=0"
-              f = urllib2.urlopen(url)
-               print url
-               time.sleep(60)
-               url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=Off&level=0"
-               f = urllib2.urlopen(url)
-               print url
-print "PIR Module Test (CTRL+C to exit)"
-time.sleep(2)
-print "Ready"
-try:
-
-               GPIO.add_event_detect(PIR_PIN, GPIO.RISING, callback=MOTION)
-               while 1:
-                              time.sleep(100)
-except KeyboardInterrupt:
-               print " Quit"
-               GPIO.cleanup()
-
---------------------------------
-**** Debugging GPIO temp reading source:
+<br>import urllib
+<br>import urllib2
+<br>import time
+<br>
+<br>GPIO.setmode(GPIO.BCM)
+<br>PIR_PIN = 7
+<br>GPIO.setup(PIR_PIN, GPIO.IN)
+<br>
+<br>def MOTION(PIR_PIN):
+<br>               print "Motion Detected!"
+<br>               url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=On&level=0"
+<br>              f = urllib2.urlopen(url)
+<br>               print url
+<br>               time.sleep(60)
+<br>               url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=Off&level=0"
+<br>               f = urllib2.urlopen(url)
+<br>               print url
+<br>print "PIR Module Test (CTRL+C to exit)"
+<br>time.sleep(2)
+<br>print "Ready"
+<br>try:
+<br>
+<br>               GPIO.add_event_detect(PIR_PIN, GPIO.RISING, callback=MOTION)
+<br>               while 1:
+<br>                              time.sleep(100)
+<br>except KeyboardInterrupt:
+<br>               print " Quit"
+<br>               GPIO.cleanup()
+<br>
+<h2>Debugging GPIO temp reading source:</h2>
 Usage: sudo python [script name] [One wire address] [domoticz virtual sensor ID]
-
-import os
-import time
-import urllib
-import urllib2
-import sys, getopt
-
-w1TempAddress = str(sys.argv[1])
-domoIDX = str(sys.argv[2])
-
-print w1TempAddress
-print domoIDX
-os.system('modprobe w1-gpio')
-os.system('modprobe w1-therm')
-temp_sensor = '/sys/bus/w1/devices/' + w1TempAddress + '/w1_slave'
-def temp_raw():
-    f = open(temp_sensor, 'r')
-    lines = f.readlines()
-    f.close()
-    return lines
-
-def read_temp():
-    lines = temp_raw()
-    while lines[0].strip()[-3:] != 'YES':
-        time.sleep(0.2)
-        lines = temp_raw()
-    temp_output = lines[1].find('t=')
-
-    if temp_output != -1:
-        temp_string = lines[1].strip()[temp_output+2:]
-        temp_c = float(temp_string) / 1000.0
-        temp_f = temp_c * 9.0 / 5.0 + 32.0
-        url = "http://192.168.1.1:8080/json.htm?type=command&param=udevice&idx=%s&nvalue=0&svalue=%.02f" % (domoIDX,temp_c)
-        f = urllib2.urlopen(url)
-        print url
-        #return temp_c
-
-read_temp()
-
---------------------------------
-**** Reset PIR sensor (debugging) source:
-
-import RPi.GPIO as GPIO
-import urllib
-import urllib2
-import time
-
-url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=Off&level=0"
-f = urllib2.urlopen(url)
-print url
-
---------------------------------
-**** BASH get temp sensor addresses:
-
-#!/bin/bash
-# This script enables oneWire and reads the temp
-
-sudo modprobe w1-gpio
-sudo modprobe w1-therm
-
-cd /sys/bus/w1/devices/
-ls
-
-cd ~
-
---------------------------------
-**** XTRINSIC MEMS Board reading python source:
-
-#!/usr/bin/env python
-import math
-import time
-import urllib
-import urllib2
-from ctypes import *
-from decimal import *
-#cdll.LoadLibrary("./bcm2835.so")
-
-sensor = CDLL("./sensor.so")
-
-class mpl3115a2:
-        def __init__(self):
-                if (0 == sensor.bcm2835_init()):
-                        print "bcm3835 driver init failed."
-                        return
-
-        def writeRegister(self, register, value):
-            sensor.MPL3115A2_WRITE_REGISTER(register, value)
-
-        def readRegister(self, register):
-                return sensor.MPL3115A2_READ_REGISTER(register)
-
-        def active(self):
-                sensor.MPL3115A2_Active()
-
-        def standby(self):
-                sensor.MPL3115A2_Standby()
-
-        def initAlt(self):
-                sensor.MPL3115A2_Init_Alt()
-
-        def initBar(self):
-                sensor.MPL3115A2_Init_Bar()
-
-        def readAlt(self):
-                return sensor.MPL3115A2_Read_Alt()
-
-        def readTemp(self):
-                return sensor.MPL3115A2_Read_Temp()
-
-        def setOSR(self, osr):
-                sensor.MPL3115A2_SetOSR(osr);
-
-        def setStepTime(self, step):
-                sensor.MPL3115A2_SetStepTime(step)
-
-        def getTemp(self):
-                t = self.readTemp()
-                t_m = (t >> 8) & 0xff;
-                t_l = t & 0xff;
-                t_l = t_l >> 4;
-                t_l = t_l * 0.0625;
-
-                return (t_m + t_l)
-
-        def getAlt(self):
-                alt = self.readAlt()
-                alt_m = alt >> 8
-                alt_l = alt & 0xff
-
-                if (alt_l > 99):
-                        alt_l = alt_l / 1000.0
-                else:
-                        alt_l = alt_l / 100.0
-
-                return self.twosToInt(alt_m, 16) + alt_l
-        def getBar(self):
-                alt = self.readAlt()
-                alt_m = alt >> 6
-                alt_l = alt & 0x03
-
-                if (alt_l > 99):
-                        alt_l = alt_l
-                else:
-                        alt_l = alt_l
-
-                return (self.twosToInt(alt_m, 18))
-
-        def twosToInt(self, val, len):
-                # Convert twos compliment to integer
-                if(val & (1 << len - 1)):
-                        val = val - (1<<len)
-
-                return val
-
-mpl = mpl3115a2()
-mpl.initBar()
-#mpl.setOSR(128)
-mpl.active()
-time.sleep(5)
-TEMP = mpl.getTemp()
-BAR = mpl.getBar()
-i = str(BAR)
-
-if i[0] == "1":
-        i = float(i[:4] + '.' + i[2:])
-else:
-        i = float(i[:3] + '.' + i[3:])
-url = "http://192.168.1.1:8080/json.htm?type=command&param=udevice&idx=19&nvalue=0&svalue=%.02f;50;HUM_STAT;%.2f;BAR_FOR" % (TEMP,i)
-f = urllib2.urlopen(url)
-print url
-
---------------------------------
-**** Oil consumption from temperature python script
-
-
-import os
-import time
-import urllib
-import urllib2
-import sys, getopt
-
-#-----------------------------------------
-# ToDo: Clean the code!
-#-----------------------------------------
-
-oil_start_level = 1000 # Oil start level in litres
-oil_consumption = 2 # Oil consumption in litres per hour
-domoticzURL = "http://192.168.1.1:8080"
-
-### Don't touch under this line !!! ###
-# ------------------------------------#
-
-temperatureTemporaryData = "temperature_data.txt"
-percentageTemporaryFile = "remaining-oil.txt"
-w1TempAddress = str(sys.argv[1]) # Don't touch this! Reads one wire address from CLI
-domoIDX = str(sys.argv[2]) # Don't touch this! Reads percentage counter address from CLI
-
-print w1TempAddress
-print domoIDX
-
-# Let's do the 1w trics to get the temp
-os.system('modprobe w1-gpio')
-os.system('modprobe w1-therm')
-temp_sensor = '/sys/bus/w1/devices/' + w1TempAddress + '/w1_slave'
-
-def read_from_file(temperatureTemporaryData):
-        with open(temperatureTemporaryData, 'r') as f:
-                my_list = [line.rstrip('\n') for line in f]
-        return my_list
-
-def write_to_file(temperatureTemporaryData,data):
-        with open(temperatureTemporaryData, 'w') as f:
-                for s in data:
-                        f.write(str(s) + '\n')
-
-def write_single_line_to_file(temperatureTemporaryData,data):
-        with open(temperatureTemporaryData, 'w') as f:
-                f.write(data + '\n')
-
-def temp_raw():
-    f = open(temp_sensor, 'r')
-    lines = f.readlines()
-    f.close()
-    return lines
-
-def write_data_to_domo(domoIDX,current_percentage):
-        url = "%s/json.htm?type=command&param=udevice&idx=%s&nvalue=0&svalue=%.02f" % (domoticzURL,domoIDX,current_percentage)
-        f = urllib2.urlopen(url)
-        print url
-
-def read_temp():
-    lines = temp_raw()
-    while lines[0].strip()[-3:] != 'YES':
-        time.sleep(0.2)
-        lines = temp_raw()
-    temp_output = lines[1].find('t=')
-
-    if temp_output != -1:
-        temp_string = lines[1].strip()[temp_output+2:]
-        temp_c = float(temp_string) / 1000.0
-        temp_f = temp_c * 9.0 / 5.0 + 32.0
-        return round(temp_c,2)
-
-def get_average_temp(tempArray):
-        temp = 0
-        average = 0
-        for temp in tempArray:
-                average = float(average)
-                average = average + float(temp)
-        average = average / 60
-        return round(average,2)
-
-def count_percentage(percentageTemporaryFile,elapsed_time,oil_consumption,oil_start_level):
-        old_level = read_from_file(percentageTemporaryFile) # ToDo: use same file for all data!!!
-        new_oil_level = float(old_level[0]) - ((float(oil_consumption)/3600)*elapsed_time)
-        new_percentage = (new_oil_level / oil_start_level) * 100
-write_single_line_to_file(percentageTemporaryFile,str(new_oil_level))
-        return new_percentage,new_oil_level
-
-def isTempRising(new_temp,average): # Check that is temperature rising
-        verdict = False
-        #print "Average: ",average
-        print "New temp: ", new_temp
-        if new_temp >= average:
-                verdict = True
-        else:
-                verdict = False
-        return verdict
-
-def writeNewTempToArray(array,new_temp): # remove last element from array and add new
-        array.pop(59)
-        array.insert(0,new_temp)
-        return array
-
-count = 0
-#current_percentage = count_percentage() # Count remaining oil percentage
-while (count != 1): # Forever loop :)
-        tempratureRising = False
-        new_temp = read_temp() # get new temperature from oneWire device
-        earlierTempArray = read_from_file(temperatureTemporaryData) # Get last 60 temps from file
-        average = get_average_temp(earlierTempArray) # Count average temperature based on earlier temps
-        temperatureRising = isTempRising(new_temp,average) # Check is temp rising
-
-        if temperatureRising == True:
-                start_time = time.time() # Start timing when temp rising
-                while temperatureRising == True:
-                        new_temp = read_temp() # get new temperature from oneWire device
-                        earlierTempArray = writeNewTempToArray(earlierTempArray,new_temp) # Get earlier temp data
-                        average = get_average_temp(earlierTempArray) # Count average temperature based on earlier temps
-                        write_to_file(temperatureTemporaryData,earlierTempArray)
-                        temperatureRising = isTempRising(new_temp,average) # Check is temp rising
-                        print "Aika: ",time.time() - start_time
-                        time.sleep(2)
-                elapsed_time = time.time() - start_time # Stop timing when temp stops rising
-                print "Polttoaika: ",elapsed_time
-                current_percentage,new_oil_level = count_percentage(percentageTemporaryFile,elapsed_time,oil_consumption,oil_start_level) # Count remaining oil percentage
-                write_data_to_domo(domoIDX,current_percentage) # Write percentage to Domoticz virtual device
-                write_data_to_domo(45,new_oil_level) # Write percentage to Domoticz virtual device
-
-        earlierTempArray = writeNewTempToArray(earlierTempArray,new_temp)
-        write_to_file(temperatureTemporaryData,earlierTempArray)
-        time.sleep(5) # delays for n seconds
-
-
---------------------------------
-
-In future:
-- Propably Flame sensor on LDR will be conneted to rPi to sense when oilburner is generating warm water / heat to the house.
-http://www.oracle.com/technetwork/articles/java/cruz-gpio-2295970.html
-
-- Also heat pump will be controlled via Zwave in future using by ZXT-120 IR module
+<br>
+<br>import os
+<br>import time
+<br>import urllib
+<br>import urllib2
+<br>import sys, getopt
+<br>
+<br>w1TempAddress = str(sys.argv[1])
+<br>domoIDX = str(sys.argv[2])
+<br>
+<br>print w1TempAddress
+<br>print domoIDX
+<br>os.system('modprobe w1-gpio')
+<br>os.system('modprobe w1-therm')
+<br>temp_sensor = '/sys/bus/w1/devices/' + w1TempAddress + '/w1_slave'
+<br>def temp_raw():
+<br>    f = open(temp_sensor, 'r')
+<br>    lines = f.readlines()
+<br>    f.close()
+<br>    return lines
+<br>
+<br>def read_temp():
+<br>    lines = temp_raw()
+<br>    while lines[0].strip()[-3:] != 'YES':
+<br>        time.sleep(0.2)
+<br>        lines = temp_raw()
+<br>    temp_output = lines[1].find('t=')
+<br>
+<br>    if temp_output != -1:
+<br>        temp_string = lines[1].strip()[temp_output+2:]
+<br>        temp_c = float(temp_string) / 1000.0
+<br>        temp_f = temp_c * 9.0 / 5.0 + 32.0
+<br>        url = "http://192.168.1.1:8080/json.htm?type=command&param=udevice&idx=%s&nvalue=0&svalue=%.02f" % (domoIDX,temp_c)
+<br>        f = urllib2.urlopen(url)
+<br>        print url
+<br>        #return temp_c
+<br>
+<br>read_temp()
+<br>
+<h2>Reset PIR sensor (debugging) source:</h2>
+
+<br>import RPi.GPIO as GPIO
+<br>import urllib
+<br>import urllib2
+<br>import time
+<br>
+<br>url = "http://192.168.1.1:8080/json.htm?type=command&param=switchlight&idx=31&switchcmd=Off&level=0"
+<br>f = urllib2.urlopen(url)
+<br>print url
+
+<h2>BASH get temp sensor addresses:</h2>
+
+<br>#!/bin/bash
+<br># This script enables oneWire and reads the temp
+<br>
+<br>sudo modprobe w1-gpio
+<br>sudo modprobe w1-therm
+<br>
+<br>cd /sys/bus/w1/devices/
+<br>ls
+<br>
+<br>cd ~
+
+<h2>XTRINSIC MEMS Board reading python source:</h2>
+
+<br>#!/usr/bin/env python
+<br>import math
+<br>import time
+<br>import urllib
+<br>import urllib2
+<br>from ctypes import *
+<br>from decimal import *
+<br>#cdll.LoadLibrary("./bcm2835.so")
+<br>
+<br>sensor = CDLL("./sensor.so")
+<br>
+<br>class mpl3115a2:
+<br>        def __init__(self):
+<br>                if (0 == sensor.bcm2835_init()):
+<br>                        print "bcm3835 driver init failed."
+<br>                        return
+<br>
+<br>        def writeRegister(self, register, value):
+<br>            sensor.MPL3115A2_WRITE_REGISTER(register, value)
+<br>
+<br>        def readRegister(self, register):
+<br>                return sensor.MPL3115A2_READ_REGISTER(register)
+<br>
+<br>        def active(self):
+<br>                sensor.MPL3115A2_Active()
+<br>
+<br>        def standby(self):
+<br>                sensor.MPL3115A2_Standby()
+<br>
+<br>        def initAlt(self):
+<br>                sensor.MPL3115A2_Init_Alt()
+<br>
+<br>        def initBar(self):
+<br>                sensor.MPL3115A2_Init_Bar()
+<br>
+<br>        def readAlt(self):
+<br>                return sensor.MPL3115A2_Read_Alt()
+<br>
+<br>        def readTemp(self):
+<br>                return sensor.MPL3115A2_Read_Temp()
+<br>
+<br>        def setOSR(self, osr):
+<br>                sensor.MPL3115A2_SetOSR(osr);
+<br>
+<br>        def setStepTime(self, step):
+<br>                sensor.MPL3115A2_SetStepTime(step)
+<br>
+<br>        def getTemp(self):
+<br>                t = self.readTemp()
+<br>                t_m = (t >> 8) & 0xff;
+<br>                t_l = t & 0xff;
+<br>                t_l = t_l >> 4;
+<br>                t_l = t_l * 0.0625;
+<br>
+<br>                return (t_m + t_l)
+<br>
+<br>        def getAlt(self):
+<br>                alt = self.readAlt()
+<br>                alt_m = alt >> 8
+<br>                alt_l = alt & 0xff
+<br>
+<br>                if (alt_l > 99):
+<br>                        alt_l = alt_l / 1000.0
+<br>                else:
+<br>                        alt_l = alt_l / 100.0
+<br>
+<br>                return self.twosToInt(alt_m, 16) + alt_l
+<br>        def getBar(self):
+<br>                alt = self.readAlt()
+<br>                alt_m = alt >> 6
+<br>                alt_l = alt & 0x03
+<br>
+<br>                if (alt_l > 99):
+<br>                        alt_l = alt_l
+<br>                else:
+<br>                        alt_l = alt_l
+<br>
+<br>                return (self.twosToInt(alt_m, 18))
+<br>
+<br>        def twosToInt(self, val, len):
+<br>                # Convert twos compliment to integer
+<br>                if(val & (1 << len - 1)):
+<br>                        val = val - (1<<len)
+<br>
+<br>                return val
+<br>
+<br>mpl = mpl3115a2()
+<br>mpl.initBar()
+<br>#mpl.setOSR(128)
+<br>mpl.active()
+<br>time.sleep(5)
+<br>TEMP = mpl.getTemp()
+<br>BAR = mpl.getBar()
+<br>i = str(BAR)
+<br>
+<br>if i[0] == "1":
+<br>        i = float(i[:4] + '.' + i[2:])
+<br>else:
+<br>        i = float(i[:3] + '.' + i[3:])
+<br>url = "http://192.168.1.1:8080/json.htm?type=command&param=udevice&idx=19&nvalue=0&svalue=%.02f;50;HUM_STAT;%.2f;BAR_FOR" % (TEMP,i)
+<br>f = urllib2.urlopen(url)
+<br>print url
+<br>
+<h2>Oil consumption from temperature python script</h2>
+<br>import os
+<br>import time
+<br>import urllib
+<br>import urllib2
+<br>import sys, getopt
+<br>
+<br>#-----------------------------------------
+<br># ToDo: Clean the code!
+<br>#-----------------------------------------
+<br>
+<br>oil_start_level = 1000 # Oil start level in litres
+<br>oil_consumption = 2 # Oil consumption in litres per hour (depends on your oil burner nozzle)
+<br>domoticzURL = "http://192.168.1.1:8080"
+<br>
+<br>### Don't touch under this line !!! ###
+<br># ------------------------------------#
+<br>temperatureTemporaryData = "temperature_data.txt"
+<br>percentageTemporaryFile = "remaining-oil.txt"
+<br>w1TempAddress = str(sys.argv[1]) # Don't touch this! Reads one wire address from CLI
+<br>domoIDX = str(sys.argv[2]) # Don't touch this! Reads percentage counter address from CLI
+<br>print w1TempAddress
+<br>print domoIDX
+<br># Let's do the 1w trics to get the temp
+<br>os.system('modprobe w1-gpio')
+<br>os.system('modprobe w1-therm')
+<br>temp_sensor = '/sys/bus/w1/devices/' + w1TempAddress + '/w1_slave'
+<br>
+<br>def read_from_file(temperatureTemporaryData):
+<br>        with open(temperatureTemporaryData, 'r') as f:
+<br>                my_list = [line.rstrip('\n') for line in f]
+<br>        return my_list
+<br>
+<br>def write_to_file(temperatureTemporaryData,data):
+<br>        with open(temperatureTemporaryData, 'w') as f:
+<br>                for s in data:
+<br>                        f.write(str(s) + '\n')
+<br>
+<br>def write_single_line_to_file(temperatureTemporaryData,data):
+<br>        with open(temperatureTemporaryData, 'w') as f:
+<br>                f.write(data + '\n')
+<br>
+<br>def temp_raw():
+<br>    f = open(temp_sensor, 'r')
+<br>    lines = f.readlines()
+<br>    f.close()
+<br>    return lines
+<br>
+<br>def write_data_to_domo(domoIDX,current_percentage):
+<br>        url = "%s/json.htm?type=command&param=udevice&idx=%s&nvalue=0&svalue=%.02f" % (domoticzURL,domoIDX,current_percentage)
+<br>        f = urllib2.urlopen(url)
+<br>        print url
+<br>
+<br>def read_temp():
+<br>    lines = temp_raw()
+<br>    while lines[0].strip()[-3:] != 'YES':
+<br>        time.sleep(0.2)
+<br>        lines = temp_raw()
+<br>    temp_output = lines[1].find('t=')
+<br>
+<br>    if temp_output != -1:
+<br>        temp_string = lines[1].strip()[temp_output+2:]
+<br>        temp_c = float(temp_string) / 1000.0
+<br>        temp_f = temp_c * 9.0 / 5.0 + 32.0
+<br>        return round(temp_c,2)
+<br>
+<br>def get_average_temp(tempArray):
+<br>        temp = 0
+<br>        average = 0
+<br>        for temp in tempArray:
+<br>                average = float(average)
+<br>                average = average + float(temp)
+<br>        average = average / 60
+<br>        return round(average,2)
+<br>
+<br>def count_percentage(percentageTemporaryFile,elapsed_time,oil_consumption,oil_start_level):
+<br>        old_level = read_from_file(percentageTemporaryFile) # ToDo: use same file for all data!!!
+<br>        new_oil_level = float(old_level[0]) - ((float(oil_consumption)/3600)*elapsed_time)
+<br>        new_percentage = (new_oil_level / oil_start_level) * 100
+<br>write_single_line_to_file(percentageTemporaryFile,str(new_oil_level))
+<br>        return new_percentage,new_oil_level
+<br>
+<br>def isTempRising(new_temp,average): # Check that is temperature rising
+<br>        verdict = False
+<br>        #print "Average: ",average
+<br>        print "New temp: ", new_temp
+<br>        if new_temp >= average:
+<br>                verdict = True
+<br>        else:
+<br>                verdict = False
+<br>        return verdict
+<br>
+<br>def writeNewTempToArray(array,new_temp): # remove last element from array and add new
+<br>        array.pop(59)
+<br>        array.insert(0,new_temp)
+<br>        return array
+<br>
+<br>count = 0
+<br>while (count != 1): # Forever loop :)
+<br>        tempratureRising = False
+<br>        new_temp = read_temp() # get new temperature from oneWire device
+<br>        earlierTempArray = read_from_file(temperatureTemporaryData) # Get last 60 temps from file
+<br>        average = get_average_temp(earlierTempArray) # Count average temperature based on earlier temps
+<br>        temperatureRising = isTempRising(new_temp,average) # Check is temp rising
+<br>
+<br>        if temperatureRising == True:
+<br>                start_time = time.time() # Start timing when temp rising
+<br>                while temperatureRising == True:
+<br>                        new_temp = read_temp() # get new temperature from oneWire device
+<br>                        earlierTempArray = writeNewTempToArray(earlierTempArray,new_temp) # Get earlier temp data
+<br>                        average = get_average_temp(earlierTempArray) # Count average temperature based on earlier temps
+<br>                        write_to_file(temperatureTemporaryData,earlierTempArray)
+<br>                        temperatureRising = isTempRising(new_temp,average) # Check is temp rising
+<br>                        print "Aika: ",time.time() - start_time
+<br>                        time.sleep(2)
+<br>                elapsed_time = time.time() - start_time # Stop timing when temp stops rising
+<br>                print "Polttoaika: ",elapsed_time
+<br>                current_percentage,new_oil_level = count_percentage(percentageTemporaryFile,elapsed_time,oil_consumption,oil_start_level) # Count remaining oil percentage
+<br>                write_data_to_domo(domoIDX,current_percentage) # Write percentage to Domoticz virtual device
+<br>                write_data_to_domo(45,new_oil_level) # Write percentage to Domoticz virtual device
+<br>
+<br>        earlierTempArray = writeNewTempToArray(earlierTempArray,new_temp)
+<br>        write_to_file(temperatureTemporaryData,earlierTempArray)
+<br>        time.sleep(5) # delays for n seconds
+
+<h1>In future:</h1>
+Propably Flame sensor on LDR will be conneted to rPi to sense when oilburner is generating warm water / heat to the house.
+<br><a href="http://www.oracle.com/technetwork/articles/java/cruz-gpio-2295970.html">http://www.oracle.com/technetwork/articles/java/cruz-gpio-2295970.html</a>
+<br>Also heat pump will be controlled via Zwave in future using by ZXT-120 IR module
+
+</body>
+</html>
